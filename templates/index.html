@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Photo Saver</title>
+<link rel="stylesheet" href="/static/style.css?v=3">
+</head>
+<body>
+
+<!-- Login view -->
+<main id="login" class="login">
+  <section class="login-card">
+    <h1>WhatsApp Photo Saver</h1>
+    <p class="sub">Scan the QR code with WhatsApp → Linked devices → Link a device.</p>
+    <div class="qr-box"><img id="qr" alt="" hidden><div id="qr-wait" class="qr-wait">Starting WhatsApp Web…</div></div>
+    <p id="login-note" class="note">The workspace opens automatically after linking.</p>
+  </section>
+</main>
+
+<!-- Workspace view -->
+<div id="work" hidden>
+  <header class="top">
+    <h1>WhatsApp Photo Saver</h1>
+    <span class="pill ok" id="p-conn">Connected</span>
+    <span class="pill" id="p-saved">0 saved</span>
+    <span class="pill" id="p-skipped">0 skipped</span>
+    <span class="pill" id="p-failed">0 failed</span>
+    <button class="pill btn" id="theme">☀ Light</button>
+    <button class="pill btn" id="close">Close the tool</button>
+  </header>
+
+  <div class="page">
+    <section class="card link">
+      <span class="label">1 · LINK WHATSAPP</span>
+      <span class="avatar" id="avatar">?</span>
+      <div class="who"><strong id="me-name">Linked account</strong><small>Linked — WhatsApp Web is connected.</small></div>
+      <button class="btn" id="logout">Log out</button>
+    </section>
+
+    <section class="card">
+      <span class="label">2 · SELECT CHATS &amp; DOWNLOAD</span>
+      <input id="search" class="input" type="search" placeholder="Search chats by name…">
+      <div class="row">
+        <button class="btn" id="rescan">Rescan chats</button><span class="muted" id="count">0 chats</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="tick-all">Tick all</button>
+        <button class="btn" id="untick-all">Untick all</button>
+        <span class="muted" id="ticked">0 ticked</span>
+      </div>
+      <ul id="chats" class="chats"></ul>
+
+      <div class="dates">
+        <label>Start<input id="start" class="input" type="datetime-local"></label>
+        <label>End<input id="end" class="input" type="datetime-local"></label>
+      </div>
+      <label class="field">Sender (optional)<input id="sender" class="input" placeholder="Filter by sender name"></label>
+      <label class="check"><input id="skip" type="checkbox" checked> Skip already-downloaded files</label>
+      <div class="field"><label for="folder">Download folder</label>
+        <div class="path-row">
+          <input id="folder" class="input strong" value="{{ default_folder }}">
+          <button class="btn paste" id="paste-folder" type="button" title="Paste a folder path from the clipboard">Paste</button>
+        </div>
+      </div>
+      <button class="btn go" id="go">Download range</button>
+      <p id="msg" class="err" hidden></p>
+    </section>
+
+    <div class="two">
+      <section class="card">
+        <span class="label" id="act-label">3 · ACTIVITY</span>
+        <ul id="activity" class="activity"></ul>
+      </section>
+      <section class="card">
+        <span class="label">DOWNLOADS</span>
+        <button class="btn" id="open-folder">Open downloads folder</button>
+        <div class="stats">
+          <div><b id="s-saved">0</b><small>SAVED</small></div>
+          <div><b id="s-skipped">0</b><small>SKIPPED</small></div>
+          <div><b id="s-failed">0</b><small>FAILED</small></div>
+        </div>
+        <hr>
+        <ul id="recent" class="recent"></ul>
+      </section>
+    </div>
+  </div>
+
+  <button class="fab" id="show-photos">Show downloaded photos</button>
+</div>
+
+<!-- Gallery -->
+<dialog id="gallery">
+  <div class="g-head"><strong>Downloaded photos</strong><button class="btn" id="g-close">Close</button></div>
+  <div id="g-grid" class="g-grid"></div>
+</dialog>
+
+<script src="/static/app.js?v=3"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+data/
+.wa_profile/
+.pydeps/
+.sandbox/
+.tmp/
+.dshshim/
+*.log
+probe.txt
