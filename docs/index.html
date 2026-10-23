@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>WhatsApp Photo Saver — save photos with captions, no install</title>
+<meta name="description" content="A bookmarklet that downloads WhatsApp Web photos into chat / date / caption folders as one ZIP. Runs entirely in your browser, nothing to install.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2300a884'/%3E%3Cpath d='M30 34h40v26a10 10 0 0 1-10 10H44L30 78V34z' fill='%230b141a'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b141a;
+    --panel: #111b21;
+    --panel-2: #202c33;
+    --line: #2a3942;
+    --text: #e9edef;
+    --muted: #8696a0;
+    --dim: #667781;
+    --accent: #00a884;
+    --accent-hi: #06cf9c;
+    --warn: #f1aeb5;
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 520px at 50% -12%, rgba(0,168,132,.16), transparent 62%),
+      var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 22px 72px; }
+  a { color: var(--accent-hi); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: var(--mono); }
+
+  header { padding: 58px 0 8px; text-align: center; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); background: rgba(32,44,51,.7);
+    color: #d1d7db; font-size: 12.5px; letter-spacing: .02em;
+    padding: 5px 11px; border-radius: 999px; margin-bottom: 20px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-hi); box-shadow: 0 0 10px var(--accent-hi); }
+  h1 {
+    margin: 0 0 14px; font-size: clamp(30px, 6vw, 46px); line-height: 1.1;
+    letter-spacing: -.025em; font-weight: 700;
+  }
+  h1 .g {
+    background: linear-gradient(92deg, #00a884, #53f0c0 60%, #9fe870);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { margin: 0 auto; max-width: 620px; color: #b9c4cb; font-size: 17px; }
+
+  section { margin-top: 40px; }
+  h2 { font-size: 15px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+
+  .card {
+    background: linear-gradient(180deg, rgba(32,44,51,.55), rgba(17,27,33,.9));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px;
+  }
+
+  /* install */
+  .install { padding: 26px 22px 22px; }
+  .bm-zone {
+    display: grid; gap: 16px; justify-items: center;
+    padding: 26px 16px; margin-bottom: 8px;
+    border: 1px dashed #3b4a54; border-radius: 12px;
+    background: radial-gradient(600px 160px at 50% 0%, rgba(0,168,132,.10), transparent 70%);
+    text-align: center;
+  }
+  a.drag {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent); color: #07231d;
+    font-weight: 700; font-size: 16.5px; letter-spacing: -.01em;
+    padding: 14px 26px; border-radius: 10px; cursor: grab;
+    border: 1px solid #00c298; text-decoration: none;
+    box-shadow: 0 10px 26px rgba(0,168,132,.26), inset 0 1px 0 rgba(255,255,255,.24);
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+    user-select: none; touch-action: none;
+  }
+  a.drag:hover { background: var(--accent-hi); text-decoration: none; transform: translateY(-1px); box-shadow: 0 14px 32px rgba(0,168,132,.34); }
+  a.drag:active { cursor: grabbing; transform: translateY(0); }
+  a.drag[aria-disabled="true"] { opacity: .45; pointer-events: none; cursor: progress; }
+  a.drag:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #06cf9c; outline-offset: 3px; }
+  .drag .ico { font-size: 18px; line-height: 1; }
+  .drag-hint { color: var(--muted); font-size: 13.5px; max-width: 440px; }
+  .drag-hint b { color: #d1d7db; font-weight: 600; }
+
+  .copy-row { display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  button.ghost {
+    font: inherit; font-size: 13.5px; font-weight: 600;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid #3b4a54; border-radius: 8px;
+    padding: 8px 13px; cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  button.ghost:hover { background: #2f3f48; border-color: #4a5c66; }
+  .status { min-height: 20px; font-size: 13px; color: var(--muted); text-align: center; }
+  .status.ok { color: var(--accent-hi); }
+  .status.err { color: var(--warn); }
+
+  ol.steps { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; counter-reset: s; }
+  ol.steps li { position: relative; padding-left: 42px; color: #cfd8dd; font-size: 14.5px; }
+  ol.steps li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: 1px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(0,168,132,.14); border: 1px solid rgba(0,168,132,.42);
+    color: var(--accent-hi); font-size: 12.5px; font-weight: 700;
+  }
+  ol.steps b { color: var(--text); }
+  kbd {
+    font: 12px/1 var(--mono); color: #d1d7db;
+    background: #26343c; border: 1px solid #3b4a54; border-bottom-width: 2px;
+    border-radius: 5px; padding: 3px 6px; white-space: nowrap;
+  }
+
+  /* tree */
+  .tree {
+    margin: 0; padding: 18px; overflow-x: auto;
+    background: #0a1217; border: 1px solid var(--line); border-radius: 12px;
+    color: #c7d3d9; font-size: 13px; line-height: 1.75;
+  }
+  .tree .f { color: #e9edef; }
+  .tree .c { color: #f1c40f; }
+  .tree .n { color: var(--dim); }
+  .caption-note { margin: 14px 0 0; color: var(--muted); font-size: 13.5px; }
+
+  /* faq */
+  details {
+    border: 1px solid var(--line); border-radius: 10px;
+    background: rgba(17,27,33,.75); padding: 0 16px;
+    margin-bottom: 9px;
+  }
+  details[open] { background: rgba(32,44,51,.6); }
+  summary {
+    cursor: pointer; list-style: none; padding: 13px 0;
+    font-weight: 600; font-size: 14.5px; color: #dde5e9;
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 18px; line-height: 1; }
+  details[open] summary::after { content: "−"; }
+  details p { margin: 0 0 14px; color: #b9c4cb; font-size: 14px; }
+  details p:last-child { margin-bottom: 15px; }
+  details code { color: #d8e2e7; background: #0a1217; border: 1px solid #26343c; border-radius: 5px; padding: 1px 5px; font-size: 12.5px; }
+
+  .grid2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .mini { padding: 16px 18px; }
+  .mini h3 { margin: 0 0 6px; font-size: 14px; color: #e9edef; }
+  .mini p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .mini .good { color: var(--accent-hi); }
+
+  .warn {
+    border-left: 3px solid #d9a441; background: rgba(217,164,65,.08);
+    border-radius: 8px; padding: 14px 16px; color: #d8c9a8; font-size: 13.5px;
+  }
+  .warn b { color: #f0d9a8; }
+
+  footer { margin-top: 54px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; text-align: center; }
+  footer p { margin: 6px 0; }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 16px);
+    background: #202c33; border: 1px solid #3b4a54; color: var(--text);
+    padding: 11px 16px; border-radius: 10px; font-size: 13.5px;
+    box-shadow: 0 12px 34px rgba(0,0,0,.5);
+    opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+    max-width: min(92vw, 520px); text-align: center; z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge"><span class="dot"></span> Runs in your browser · nothing to install</div>
+    <h1>Save WhatsApp photos<br><span class="g">with their captions.</span></h1>
+    <p class="lede">
+      A bookmarklet for WhatsApp Web. Pick a chat and a date range, and get one ZIP
+      organised as <b>chat → date → caption → photos</b>. No account, no server, no upload.
+    </p>
+  </header>
+
+  <section class="card install" aria-labelledby="install-h">
+    <h2 id="install-h">Install the bookmarklet</h2>
+
+    <div class="bm-zone">
+      <a id="dragBtn" class="drag" href="#" draggable="true" aria-disabled="true"
+         aria-describedby="dragHint" title="Drag me to your bookmarks bar">
+        <span class="ico" aria-hidden="true">⬇</span>
+        <span>WhatsApp Photo Saver</span>
+      </a>
+      <div class="copy-row">
+        <button class="ghost" id="copyBtn" type="button">Copy bookmarklet code</button>
+        <button class="ghost" id="showBtn" type="button">Can’t drag? Show me how</button>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite">Loading the bookmarklet…</div>
+      <div class="drag-hint" id="dragHint">
+        Drag the green button onto your <b>bookmarks bar</b>, then open
+        <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer">web.whatsapp.com</a>
+        and click it there. Not on this page.
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li><b>Show your bookmarks bar</b> — press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> (<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> on Mac).</li>
+      <li><b>Drag the green button</b> up to that bar. It becomes a bookmark named “WhatsApp Photo Saver”.</li>
+      <li><b>Open WhatsApp Web</b>, sign in if asked, then <b>click the bookmark</b>. A small panel appears in the corner.</li>
+      <li><b>Pick a chat and range</b>, press <b>Scan</b>, then <b>Download ZIP</b>. Your browser saves the archive.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="what-h">
+    <h2 id="what-h">What you get</h2>
+    <pre class="tree"><span class="f">WhatsApp Photos - Site A - 22-10-2026 to 23-10-2026.zip</span>
+└── <span class="f">Site A</span>
+    └── <span class="f">22-10-2026</span>
+        ├── <span class="c">Please bring this thing too</span>
+        │   └── <span class="n">Me_22-10-2026_182335_eecdff.jpg</span>
+        ├── <span class="c">The current termination is not correct</span>
+        │   └── <span class="n">Me_22-10-2026_182811_ff11d5.jpg</span>
+        └── <span class="c">No caption</span>
+            └── <span class="n">Rabin_22-10-2026_183001_ab12cd.jpg</span></pre>
+    <p class="caption-note">
+      One folder per chat, then per day, then per caption. Album photos share the album’s single
+      caption, and photos without one go to <b>No caption</b>. Filenames are
+      <code>sender_date_time_hash.ext</code>, so nothing is overwritten when you re-download.
+    </p>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card mini">
+        <h3>Photos <span class="good">without captions</span> still work</h3>
+        <p>Captions are read from the message itself, including album captions that sit on a sibling photo or video.</p>
+      </div>
+      <div class="card mini">
+        <h3>Videos are opt-in</h3>
+        <p>Tick “Include videos” to pull MP4s too. They use the same folder and naming rules.</p>
+      </div>
+      <div class="card mini">
+        <h3>Re-downloads don’t duplicate</h3>
+        <p>Each filename carries a short hash of the chat and message id, so the same photo always gets the same name.</p>
+      </div>
+      <div class="card mini">
+        <h3>Chat list respects your contacts</h3>
+        <p>Groups and direct chats are named the way WhatsApp shows them, with a numeric suffix only when two names collide.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="faq-h">
+    <h2 id="faq-h">Questions</h2>
+
+    <details>
+      <summary>Is this safe? Where does my data go?</summary>
+      <p>
+        Nowhere. The bookmarklet is a plain script that runs inside the WhatsApp Web tab you already have open.
+        It reads WhatsApp’s own local storage in your browser, downloads each photo straight from WhatsApp’s CDN,
+        decrypts it in memory, and builds the ZIP locally. There is no server, no account, no analytics, and no
+        upload. This page is static files only.
+      </p>
+    </details>
+
+    <details>
+      <summary>Do I have to give it my password or scan a QR code again?</summary>
+      <p>
+        No. It uses the session your browser already has. If WhatsApp Web is logged in, the bookmarklet is too.
+        It never sees your password and never creates a linked device.
+      </p>
+    </details>
+
+    <details>
+      <summary>Why are some photos missing or marked failed?</summary>
+      <p>
+        WhatsApp Web only keeps a limited slice of history on your device, and old media expires on WhatsApp’s
+        servers. Anything already expired returns HTTP 404/410 and cannot be recovered by any tool. The panel lists
+        those failures and still gives you a ZIP with everything that worked.
+      </p>
+    </details>
+
+    <details>
+      <summary>Nothing happens when I click the bookmark.</summary>
+      <p>
+        Make sure you are on <b>web.whatsapp.com</b> with the chat list visible, not on this page. Then click the
+        bookmark again. If you use Firefox, paste the code into a bookmark’s URL field instead of dragging —
+        Chrome, Edge, and Brave handle dragging best.
+      </p>
+    </details>
+
+    <details>
+      <summary>How large a range can I export?</summary>
+      <p>
+        The ZIP is assembled in memory, so a few hundred photos is comfortable. For very large exports, run the
+        download once per month, or use the local Python version from the repository, which writes straight to disk
+        and skips files you already have.
+      </p>
+    </details>
+
+    <details>
+      <summary>Does it work on my phone or tablet?</summary>
+      <p>
+        No. Mobile browsers do not support bookmarklets on WhatsApp Web, and WhatsApp Web itself is a desktop
+        experience. Use a desktop browser.
+      </p>
+    </details>
+
+    <details>
+      <summary>Why does it need to call WhatsApp internals?</summary>
+      <p>
+        WhatsApp stores captions in an encrypted field that is only readable through the page’s own message models.
+        The bookmarklet asks those already-loaded models for the caption text. If a future WhatsApp update changes
+        that, captions fall back to <b>No caption</b> and the photos still download normally.
+      </p>
+    </details>
+  </section>
+
+  <section aria-labelledby="limits-h">
+    <h2 id="limits-h">Before you use it</h2>
+    <div class="warn">
+      <b>Use it on your own account.</b> This automates your own WhatsApp Web session, which is outside WhatsApp’s
+      terms of service — that is your call and your risk, and a future WhatsApp update may break it. It does not
+      bypass encryption, read other people’s accounts, or send anything anywhere. Please also respect the privacy of
+      the people in your chats before you share an export.
+    </div>
+  </section>
+
+  <footer>
+    <p>WhatsApp Photo Saver · bookmarklet v1.0.0 · updated 24 Oct 2026</p>
+    <p>
+      <a href="https://github.com/tholsothea5-lang/WhatsAppPhotoSaverForDevilProject" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+      · <a href="https://github.com/tholsothea5-lang/WhatsAppPhotoSaverForDevilProject/blob/main/docs/wps-bookmarklet.js" target="_blank" rel="noopener noreferrer">Read the script</a>
+      · Not affiliated with WhatsApp or Meta.
+    </p>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var dragBtn = document.getElementById('dragBtn');
+  var copyBtn = document.getElementById('copyBtn');
+  var showBtn = document.getElementById('showBtn');
+  var statusEl = document.getElementById('status');
+  var toastEl = document.getElementById('toast');
+  var ready = false;
+  var toastTimer = 0;
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  }
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  fetch('wps-bookmarklet.js', { cache: 'no-cache' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function (src) {
+      if (src.indexOf('void async function') !== 0) throw new Error('unexpected script contents');
+      dragBtn.href = 'javascript:' + encodeURIComponent(src);
+      dragBtn.setAttribute('aria-disabled', 'false');
+      dragBtn.removeAttribute('title');
+      ready = true;
+      setStatus('Ready — drag it to your bookmarks bar.', 'ok');
+    })
+    .catch(function (err) {
+      setStatus('Could not load the script (' + err.message + '). Use “Copy bookmarklet code” below, ' +
+        'or open wps-bookmarklet.js from the repository.', 'err');
+    });
+
+  dragBtn.addEventListener('click', function (e) {
+    if (!ready) { e.preventDefault(); return; }
+    e.preventDefault();
+    toast('That is the bookmarklet. Drag it to your bookmarks bar, then click it on web.whatsapp.com.');
+  });
+
+  copyBtn.addEventListener('click', function () {
+    if (!ready) { toast('Still loading the bookmarklet…'); return; }
+    var href = dragBtn.getAttribute('href');
+    var done = function () {
+      toast('Copied. Create a bookmark and paste this as its URL.');
+      setStatus('Copied — paste it into a new bookmark’s URL field.', 'ok');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(href).then(done).catch(function () { fallbackCopy(href, done); });
+    } else {
+      fallbackCopy(href, done);
+    }
+  });
+
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    if (ok) done();
+    else toast('Copy failed. Open wps-bookmarklet.js and copy its contents manually.');
+  }
+
+  showBtn.addEventListener('click', function () {
+    toast('Bookmark manager → Add new bookmark → Name: WhatsApp Photo Saver → paste the copied code as the URL.');
+  });
+}());
+</script>
+</body>
+</html>
