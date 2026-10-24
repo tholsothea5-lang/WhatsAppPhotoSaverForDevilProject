@@ -10,26 +10,18 @@ There are two ways to use it:
 Both save photos as `<chat name>/<dd-mm-yyyy>/<caption>/<sender>_<date>_<time>_<id>.jpg`.
 Photos sent without a caption go into a `No caption` folder, and every photo in an album goes into one folder named after the album's caption.
 
-## Bookmarklet (no install)
+## Browser (paste into DevTools) — no install
 
-Open **https://tholsothea5-lang.github.io/WhatsAppPhotoSaverForDevilProject/** and drag the green
-**WhatsApp Photo Saver** button to your bookmarks bar. Then open
-[web.whatsapp.com](https://web.whatsapp.com), sign in if WhatsApp asks, and click the bookmark.
+Open **https://tholsothea5-lang.github.io/WhatsAppPhotoSaverForDevilProject/**, copy the script, then:
 
-1. Pick a chat and a date range in the panel.
-2. Press **Scan**, then **Download ZIP**.
-3. Your browser saves `WhatsApp Photos - <chat> - <from> to <to>.zip`.
+1. Open [web.whatsapp.com](https://web.whatsapp.com) and wait for your chats to load.
+2. Press **Ctrl+Shift+J** (Windows/Linux) or **⌥⌘J** (Mac) to open DevTools → **Console**.
+3. If Chrome asks, type `allow pasting` and press **Enter**.
+4. Paste the script and press **Enter**. A panel appears in the corner of WhatsApp Web — pick a chat and date range, **Scan**, then **Download ZIP**.
 
-How it works: the bookmarklet reads WhatsApp's own IndexedDB, decrypts each photo in memory with WebCrypto,
-and builds the ZIP locally. Captions come from WhatsApp's live message models (albums share one caption);
-if a future update hides them, files fall back to `No caption`. Nothing is uploaded and no account is created.
+How it works: the script runs inside the WhatsApp Web tab (the same context that has access to WhatsApp's local IndexedDB), reads WhatsApp's live message models for captions, decrypts each photo in memory with WebCrypto, and builds a STORE-only ZIP locally. Nothing is uploaded. If you reload WhatsApp Web you'll need to run it again; for repeat use save it as a **DevTools Snippet**.
 
-Limits: only media this device has cached and that has not expired on WhatsApp's servers can be downloaded
-(the panel lists failures). The ZIP is built in memory, so export a few hundred photos at a time. Desktop
-Chrome, Edge, and Brave work best — Firefox users should paste the copied code into a bookmark's URL field.
-
-The site is served from this repo's [`docs/`](docs/) folder on `main`; the bookmarklet itself is
-[`docs/wps-bookmarklet.js`](docs/wps-bookmarklet.js).
+**Why DevTools, not a bookmarklet?** WhatsApp Web uses a strict Content Security Policy that blocks `javascript:` bookmarklets in Chrome/Edge. Running the code in the browser's built-in DevTools console is exempt from that policy and requires nothing to install. The script is served from this repo's [`docs/`](docs/) folder on `main` ([`docs/wps-script.js`](docs/wps-script.js)).
 
 ## Local app (Windows)
 1. Install **Python 3.10+** from python.org (tick "Add Python to PATH") and **Git**.

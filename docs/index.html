@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>WhatsApp Photo Saver — save photos with captions, no install</title>
-<meta name="description" content="A bookmarklet that downloads WhatsApp Web photos into chat / date / caption folders as one ZIP. Runs entirely in your browser, nothing to install.">
+<title>WhatsApp Photo Saver — paste in DevTools, no install</title>
+<meta name="description" content="A single script that runs in WhatsApp Web's DevTools console and saves photos into chat/date/caption folders as one ZIP. Static GitHub Pages page, nothing to install.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2300a884'/%3E%3Cpath d='M30 34h40v26a10 10 0 0 1-10 10H44L30 78V34z' fill='%230b141a'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -54,10 +54,11 @@
     background: linear-gradient(92deg, #00a884, #53f0c0 60%, #9fe870);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .lede { margin: 0 auto; max-width: 620px; color: #b9c4cb; font-size: 17px; }
+  .lede { margin: 0 auto; max-width: 640px; color: #b9c4cb; font-size: 17px; }
 
   section { margin-top: 40px; }
   h2 { font-size: 15px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; color: #e9edef; }
 
   .card {
     background: linear-gradient(180deg, rgba(32,44,51,.55), rgba(17,27,33,.9));
@@ -65,34 +66,25 @@
     padding: 22px;
   }
 
-  /* install */
-  .install { padding: 26px 22px 22px; }
-  .bm-zone {
-    display: grid; gap: 16px; justify-items: center;
-    padding: 26px 16px; margin-bottom: 8px;
+  /* console */ .console { padding: 26px 22px 22px; }
+  .zone {
+    display: grid; gap: 14px; justify-items: center;
+    padding: 26px 16px; margin-bottom: 10px;
     border: 1px dashed #3b4a54; border-radius: 12px;
     background: radial-gradient(600px 160px at 50% 0%, rgba(0,168,132,.10), transparent 70%);
     text-align: center;
   }
-  a.drag {
+  button.primary {
     display: inline-flex; align-items: center; gap: 10px;
+    font: inherit; font-weight: 700; font-size: 16.5px; letter-spacing: -.01em;
     background: var(--accent); color: #07231d;
-    font-weight: 700; font-size: 16.5px; letter-spacing: -.01em;
-    padding: 14px 26px; border-radius: 10px; cursor: grab;
-    border: 1px solid #00c298; text-decoration: none;
+    padding: 14px 28px; border-radius: 10px; border: 1px solid #00c298; cursor: pointer;
     box-shadow: 0 10px 26px rgba(0,168,132,.26), inset 0 1px 0 rgba(255,255,255,.24);
     transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-    user-select: none; touch-action: none;
   }
-  a.drag:hover { background: var(--accent-hi); text-decoration: none; transform: translateY(-1px); box-shadow: 0 14px 32px rgba(0,168,132,.34); }
-  a.drag:active { cursor: grabbing; transform: translateY(0); }
-  a.drag[aria-disabled="true"] { opacity: .45; pointer-events: none; cursor: progress; }
-  a.drag:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #06cf9c; outline-offset: 3px; }
-  .drag .ico { font-size: 18px; line-height: 1; }
-  .drag-hint { color: var(--muted); font-size: 13.5px; max-width: 440px; }
-  .drag-hint b { color: #d1d7db; font-weight: 600; }
-
-  .copy-row { display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  button.primary:hover { background: var(--accent-hi); transform: translateY(-1px); box-shadow: 0 14px 32px rgba(0,168,132,.34); }
+  button.primary:active { transform: translateY(0); }
+  button.primary[disabled] { opacity: .45; pointer-events: none; cursor: progress; }
   button.ghost {
     font: inherit; font-size: 13.5px; font-weight: 600;
     color: var(--text); background: var(--panel-2);
@@ -101,6 +93,9 @@
     transition: background .12s ease, border-color .12s ease;
   }
   button.ghost:hover { background: #2f3f48; border-color: #4a5c66; }
+  .row { display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .hint { color: var(--muted); font-size: 13.5px; max-width: 520px; }
+  .hint b { color: #d1d7db; font-weight: 600; }
   .status { min-height: 20px; font-size: 13px; color: var(--muted); text-align: center; }
   .status.ok { color: var(--accent-hi); }
   .status.err { color: var(--warn); }
@@ -122,7 +117,12 @@
     border-radius: 5px; padding: 3px 6px; white-space: nowrap;
   }
 
-  /* tree */
+  .note {
+    margin-top: 18px; padding: 14px 16px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: rgba(32,44,51,.5); color: #cfd8dd; font-size: 13.5px;
+  }
+
   .tree {
     margin: 0; padding: 18px; overflow-x: auto;
     background: #0a1217; border: 1px solid var(--line); border-radius: 12px;
@@ -133,11 +133,9 @@
   .tree .n { color: var(--dim); }
   .caption-note { margin: 14px 0 0; color: var(--muted); font-size: 13.5px; }
 
-  /* faq */
   details {
     border: 1px solid var(--line); border-radius: 10px;
-    background: rgba(17,27,33,.75); padding: 0 16px;
-    margin-bottom: 9px;
+    background: rgba(17,27,33,.75); padding: 0 16px; margin-bottom: 9px;
   }
   details[open] { background: rgba(32,44,51,.6); }
   summary {
@@ -167,59 +165,67 @@
 
   footer { margin-top: 54px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; text-align: center; }
   footer p { margin: 6px 0; }
+
   .toast {
     position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 16px);
     background: #202c33; border: 1px solid #3b4a54; color: var(--text);
     padding: 11px 16px; border-radius: 10px; font-size: 13.5px;
     box-shadow: 0 12px 34px rgba(0,0,0,.5);
     opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
-    max-width: min(92vw, 520px); text-align: center; z-index: 10;
+    max-width: min(92vw, 560px); text-align: center; z-index: 10; white-space: nowrap;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; scroll-behavior: auto; }
-  }
+  @media (max-width: 520px) { .toast { white-space: normal; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto; } }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <div class="badge"><span class="dot"></span> Runs in your browser · nothing to install</div>
+    <div class="badge"><span class="dot"></span> Static page · nothing to install · runs in your browser</div>
     <h1>Save WhatsApp photos<br><span class="g">with their captions.</span></h1>
     <p class="lede">
-      A bookmarklet for WhatsApp Web. Pick a chat and a date range, and get one ZIP
-      organised as <b>chat → date → caption → photos</b>. No account, no server, no upload.
+      One paste into WhatsApp Web's DevTools console. Get a ZIP organised as
+      <b>chat → date → caption → photos</b>. Everything runs locally in that tab — nothing uploaded.
     </p>
   </header>
 
-  <section class="card install" aria-labelledby="install-h">
-    <h2 id="install-h">Install the bookmarklet</h2>
+  <section class="card console" aria-labelledby="run-h">
+    <h2 id="run-h">Run it</h2>
 
-    <div class="bm-zone">
-      <a id="dragBtn" class="drag" href="#" draggable="true" aria-disabled="true"
-         aria-describedby="dragHint" title="Drag me to your bookmarks bar">
-        <span class="ico" aria-hidden="true">⬇</span>
-        <span>WhatsApp Photo Saver</span>
-      </a>
-      <div class="copy-row">
-        <button class="ghost" id="copyBtn" type="button">Copy bookmarklet code</button>
-        <button class="ghost" id="showBtn" type="button">Can’t drag? Show me how</button>
+    <div class="zone">
+      <button class="primary" id="copyBtn" type="button">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <rect x="6" y="6" width="9" height="9" rx="1.6" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M3 12V3a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        Copy script to clipboard
+      </button>
+      <div class="row">
+        <button class="ghost" id="showBtn" type="button">Show me where to paste</button>
+        <a class="ghost" id="rawLink" href="wps-script.js" target="_blank" rel="noopener noreferrer">Open raw script</a>
       </div>
-      <div class="status" id="status" role="status" aria-live="polite">Loading the bookmarklet…</div>
-      <div class="drag-hint" id="dragHint">
-        Drag the green button onto your <b>bookmarks bar</b>, then open
-        <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer">web.whatsapp.com</a>
-        and click it there. Not on this page.
+      <div class="status" id="status" role="status" aria-live="polite">Loading the script…</div>
+      <div class="hint">
+        This page is a static build on GitHub Pages. The script runs <b>inside</b> the
+        <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer">web.whatsapp.com</a> tab you already have open,
+        not here. There is no server and no password.
       </div>
     </div>
 
     <ol class="steps">
-      <li><b>Show your bookmarks bar</b> — press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> (<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> on Mac).</li>
-      <li><b>Drag the green button</b> up to that bar. It becomes a bookmark named “WhatsApp Photo Saver”.</li>
-      <li><b>Open WhatsApp Web</b>, sign in if asked, then <b>click the bookmark</b>. A small panel appears in the corner.</li>
-      <li><b>Pick a chat and range</b>, press <b>Scan</b>, then <b>Download ZIP</b>. Your browser saves the archive.</li>
+      <li><b>Open WhatsApp Web</b> — go to <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer">web.whatsapp.com</a> and wait for your chats to load.</li>
+      <li><b>Open DevTools</b> — press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> (Windows/Linux) or <kbd>⌥</kbd>+<kbd>⌘</kbd>+<kbd>J</kbd> (Mac). Switch to the <b>Console</b> tab.</li>
+      <li><b>Allow pasting once</b> — if Chrome shows a warning, type <code>allow pasting</code> and press <kbd>Enter</kbd>. You only do this once.</li>
+      <li><b>Paste and run</b> — click <b>Copy script to clipboard</b> above, paste (<kbd>Ctrl</kbd>+<kbd>V</kbd>) into the console, press <kbd>Enter</kbd>. A panel appears in the corner of WhatsApp Web. Pick a chat and date range, <b>Scan</b>, then <b>Download ZIP</b>.</li>
     </ol>
+
+    <div class="note">
+      <b>Tip:</b> To use it again later without reopening this page, DevTools → <b>Sources</b> → <b>Snippets</b> →
+      <b>New snippet</b>, paste the script once, and run it with <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (it stays saved).
+      If you reload WhatsApp Web you'll need to run it again.
+    </div>
   </section>
 
   <section aria-labelledby="what-h">
@@ -234,27 +240,27 @@
         └── <span class="c">No caption</span>
             └── <span class="n">Rabin_22-10-2026_183001_ab12cd.jpg</span></pre>
     <p class="caption-note">
-      One folder per chat, then per day, then per caption. Album photos share the album’s single
-      caption, and photos without one go to <b>No caption</b>. Filenames are
-      <code>sender_date_time_hash.ext</code>, so nothing is overwritten when you re-download.
+      One folder per chat, then per day, then per caption. Album photos share the album's caption, and photos
+      without one go to <b>No caption</b>. Filenames are <code>sender_date_time_hash.ext</code> so re-downloading
+      won't overwrite.
     </p>
 
     <div class="grid2" style="margin-top:16px">
       <div class="card mini">
-        <h3>Photos <span class="good">without captions</span> still work</h3>
-        <p>Captions are read from the message itself, including album captions that sit on a sibling photo or video.</p>
+        <h3>Captions included</h3>
+        <p>Reads captions from WhatsApp's live message models, including album captions.</p>
       </div>
       <div class="card mini">
         <h3>Videos are opt-in</h3>
-        <p>Tick “Include videos” to pull MP4s too. They use the same folder and naming rules.</p>
+        <p>Tick "Include videos" to pull MP4s with the same layout and naming.</p>
       </div>
       <div class="card mini">
-        <h3>Re-downloads don’t duplicate</h3>
-        <p>Each filename carries a short hash of the chat and message id, so the same photo always gets the same name.</p>
+        <h3>Safe re-runs</h3>
+        <p>Short hashes keep filenames unique; failed downloads (expired media) are reported and skipped.</p>
       </div>
       <div class="card mini">
-        <h3>Chat list respects your contacts</h3>
-        <p>Groups and direct chats are named the way WhatsApp shows them, with a numeric suffix only when two names collide.</p>
+        <h3>Runs entirely locally</h3>
+        <p>Decrypts in memory with WebCrypto, builds the ZIP in the tab, and your browser saves it. No uploads.</p>
       </div>
     </div>
   </section>
@@ -263,64 +269,46 @@
     <h2 id="faq-h">Questions</h2>
 
     <details>
-      <summary>Is this safe? Where does my data go?</summary>
+      <summary>Why the console, not a bookmarklet?</summary>
       <p>
-        Nowhere. The bookmarklet is a plain script that runs inside the WhatsApp Web tab you already have open.
-        It reads WhatsApp’s own local storage in your browser, downloads each photo straight from WhatsApp’s CDN,
-        decrypts it in memory, and builds the ZIP locally. There is no server, no account, no analytics, and no
-        upload. This page is static files only.
+        WhatsApp Web uses a strict Content Security Policy that blocks <code>javascript:</code> bookmarklets. The
+        browser's DevTools console is exempt from that CSP, so pasting the script there is the standard, zero-install
+        workaround. The code is identical to what was tested against real WhatsApp Web.
       </p>
     </details>
 
     <details>
-      <summary>Do I have to give it my password or scan a QR code again?</summary>
+      <summary>Is this safe?</summary>
       <p>
-        No. It uses the session your browser already has. If WhatsApp Web is logged in, the bookmarklet is too.
-        It never sees your password and never creates a linked device.
+        Nothing leaves the browser. The script reads WhatsApp's own local storage and CDN, decrypts media in memory,
+        and creates a ZIP download. There is no network call to a third-party server. You are only running code
+        you copied from this page on <em>your own</em> WhatsApp Web session.
       </p>
     </details>
 
     <details>
-      <summary>Why are some photos missing or marked failed?</summary>
+      <summary>Why do some photos fail to download?</summary>
       <p>
-        WhatsApp Web only keeps a limited slice of history on your device, and old media expires on WhatsApp’s
-        servers. Anything already expired returns HTTP 404/410 and cannot be recovered by any tool. The panel lists
-        those failures and still gives you a ZIP with everything that worked.
+        WhatsApp Web only has media cached that it has loaded on this device, and older media expires from
+        WhatsApp's servers (HTTP 404/410). Those are reported as failures and the ZIP still contains everything
+        that downloaded successfully.
       </p>
     </details>
 
     <details>
-      <summary>Nothing happens when I click the bookmark.</summary>
+      <summary>Chrome says "Don't paste code..."</summary>
       <p>
-        Make sure you are on <b>web.whatsapp.com</b> with the chat list visible, not on this page. Then click the
-        bookmark again. If you use Firefox, paste the code into a bookmark’s URL field instead of dragging —
-        Chrome, Edge, and Brave handle dragging best.
+        That's Chrome's built-in self-XSS protection. If you copied the script from this page and understand what
+        it does, type <code>allow pasting</code> into the console and press Enter. After that you can paste normally
+        for this profile.
       </p>
     </details>
 
     <details>
-      <summary>How large a range can I export?</summary>
+      <summary>Does this work on Firefox or Edge?</summary>
       <p>
-        The ZIP is assembled in memory, so a few hundred photos is comfortable. For very large exports, run the
-        download once per month, or use the local Python version from the repository, which writes straight to disk
-        and skips files you already have.
-      </p>
-    </details>
-
-    <details>
-      <summary>Does it work on my phone or tablet?</summary>
-      <p>
-        No. Mobile browsers do not support bookmarklets on WhatsApp Web, and WhatsApp Web itself is a desktop
-        experience. Use a desktop browser.
-      </p>
-    </details>
-
-    <details>
-      <summary>Why does it need to call WhatsApp internals?</summary>
-      <p>
-        WhatsApp stores captions in an encrypted field that is only readable through the page’s own message models.
-        The bookmarklet asks those already-loaded models for the caption text. If a future WhatsApp update changes
-        that, captions fall back to <b>No caption</b> and the photos still download normally.
+        It has been tested in Chromium-based browsers (Chrome, Edge). Firefox's console works in a similar way, but
+        some APIs can differ. If something breaks on Firefox, use Chrome/Edge for best results.
       </p>
     </details>
   </section>
@@ -328,18 +316,17 @@
   <section aria-labelledby="limits-h">
     <h2 id="limits-h">Before you use it</h2>
     <div class="warn">
-      <b>Use it on your own account.</b> This automates your own WhatsApp Web session, which is outside WhatsApp’s
-      terms of service — that is your call and your risk, and a future WhatsApp update may break it. It does not
-      bypass encryption, read other people’s accounts, or send anything anywhere. Please also respect the privacy of
-      the people in your chats before you share an export.
+      <b>Use it on your own account.</b> This runs in your own WhatsApp Web session and is outside WhatsApp's terms
+      of service — use it only with your own account and at your own risk. WhatsApp updates can change internals
+      and break it. Respect the privacy of others before sharing an export.
     </div>
   </section>
 
   <footer>
-    <p>WhatsApp Photo Saver · bookmarklet v1.0.0 · updated 24 Oct 2026</p>
+    <p>WhatsApp Photo Saver · console script v1.1.0 · updated 24 Oct 2026</p>
     <p>
       <a href="https://github.com/tholsothea5-lang/WhatsAppPhotoSaverForDevilProject" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
-      · <a href="https://github.com/tholsothea5-lang/WhatsAppPhotoSaverForDevilProject/blob/main/docs/wps-bookmarklet.js" target="_blank" rel="noopener noreferrer">Read the script</a>
+      · <a href="https://github.com/tholsothea5-lang/WhatsAppPhotoSaverForDevilProject/blob/main/docs/wps-script.js" target="_blank" rel="noopener noreferrer">Read the script</a>
       · Not affiliated with WhatsApp or Meta.
     </p>
   </footer>
@@ -349,19 +336,17 @@
 
 <script>
 (function () {
-  var dragBtn = document.getElementById('dragBtn');
   var copyBtn = document.getElementById('copyBtn');
   var showBtn = document.getElementById('showBtn');
   var statusEl = document.getElementById('status');
   var toastEl = document.getElementById('toast');
-  var ready = false;
-  var toastTimer = 0;
+  var raw = '';
 
   function toast(msg) {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
   }
 
   function setStatus(msg, kind) {
@@ -369,61 +354,48 @@
     statusEl.className = 'status' + (kind ? ' ' + kind : '');
   }
 
-  fetch('wps-bookmarklet.js', { cache: 'no-cache' })
-    .then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    })
+  fetch('wps-script.js', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(function (src) {
-      if (src.indexOf('void async function') !== 0) throw new Error('unexpected script contents');
-      dragBtn.href = 'javascript:' + encodeURIComponent(src);
-      dragBtn.setAttribute('aria-disabled', 'false');
-      dragBtn.removeAttribute('title');
-      ready = true;
-      setStatus('Ready — drag it to your bookmarks bar.', 'ok');
+      raw = src;
+      if (raw.indexOf('void async function') !== 0 && raw.trim().indexOf('void async function') !== 0) throw new Error('unexpected');
+      copyBtn.disabled = false;
+      setStatus('Script ready (' + Math.round(raw.length / 1024 * 10) / 10 + ' KB) — copy and paste into the WhatsApp Web console.', 'ok');
     })
     .catch(function (err) {
-      setStatus('Could not load the script (' + err.message + '). Use “Copy bookmarklet code” below, ' +
-        'or open wps-bookmarklet.js from the repository.', 'err');
+      copyBtn.disabled = true;
+      setStatus('Couldn’t load the script (' + err.message + '). Use “Open raw script” above and copy it.', 'err');
     });
 
-  dragBtn.addEventListener('click', function (e) {
-    if (!ready) { e.preventDefault(); return; }
-    e.preventDefault();
-    toast('That is the bookmarklet. Drag it to your bookmarks bar, then click it on web.whatsapp.com.');
-  });
-
   copyBtn.addEventListener('click', function () {
-    if (!ready) { toast('Still loading the bookmarklet…'); return; }
-    var href = dragBtn.getAttribute('href');
+    if (!raw) { toast('Still loading…'); return; }
     var done = function () {
-      toast('Copied. Create a bookmark and paste this as its URL.');
-      setStatus('Copied — paste it into a new bookmark’s URL field.', 'ok');
+      toast('Copied — paste into the DevTools Console on web.whatsapp.com');
+      setStatus('Copied. Go to web.whatsapp.com → F12/DevTools → Console, allow pasting, paste and press Enter.', 'ok');
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(href).then(done).catch(function () { fallbackCopy(href, done); });
+      navigator.clipboard.writeText(raw).then(done).catch(function () { fb(raw, done); });
     } else {
-      fallbackCopy(href, done);
+      fb(raw, done);
     }
   });
 
-  function fallbackCopy(text, done) {
+  function fb(t, done) {
     var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
+    ta.value = t;
+    ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.left='-9999px';
     document.body.appendChild(ta);
     ta.select();
     var ok = false;
-    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    try { ok = document.execCommand('copy'); } catch(e){ ok=false; }
     ta.remove();
     if (ok) done();
-    else toast('Copy failed. Open wps-bookmarklet.js and copy its contents manually.');
+    else toast('Copy failed — use “Open raw script” and copy manually.');
   }
 
   showBtn.addEventListener('click', function () {
-    toast('Bookmark manager → Add new bookmark → Name: WhatsApp Photo Saver → paste the copied code as the URL.');
+    toast('Open web.whatsapp.com → Ctrl+Shift+J → Console → type allow pasting if asked → paste and Enter.');
   });
 }());
 </script>
