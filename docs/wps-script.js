@@ -681,6 +681,7 @@ void async function wpsBookmarklet() {
     let saved = 0, failed = 0;
     const total = S.items.length;
     let firstTs = 0, lastTs = 0;
+    const captionWritten = new Map();
 
     for (let i = 0; i < total; i++) {
       if (S.cancel) break;
@@ -690,9 +691,20 @@ void async function wpsBookmarklet() {
         const data = await decryptMedia(it.m);
         const when = new Date(it.ts * 1000);
         const tail = (await sha1Hex(it.id)).slice(0, 6);
-        const folder = it.caption ? safe(it.caption, 60) : 'No caption';
+        const hasCaption = !!(it.caption && it.caption.trim());
+        const captionKey = hasCaption ? (it.album ? `album:${it.album}` : `cap:${it.caption.trim().toLowerCase()}`) : 'none';
+        const groupKey = `${chatFolder}|${dmy(when)}|${captionKey}`;
+        const groupDir = hasCaption
+          ? safe(it.caption.trim(), 60) || 'No caption'
+          : 'No Caption';
         const name = `${safe(it.sender, 30)}_${stamp(when)}_${tail}.${it.ext}`;
-        zipAdd(zip, `${chatFolder}/${dmy(when)}/${folder}/${name}`, data, when);
+        zipAdd(zip, `${chatFolder}/${dmy(when)}/${groupDir}/${name}`, data, when);
+        if (hasCaption && !captionWritten.has(groupKey)) {
+          const capText = it.caption.trim().replace(/\r\n/g, '\n');
+          const capBytes = new TextEncoder().encode(capText + '\n');
+          zipAdd(zip, `${chatFolder}/${dmy(when)}/${groupDir}/caption.txt`, capBytes, when);
+          captionWritten.set(groupKey, true);
+        }
         saved++;
         if (!firstTs || it.ts < firstTs) firstTs = it.ts;
         if (it.ts > lastTs) lastTs = it.ts;
