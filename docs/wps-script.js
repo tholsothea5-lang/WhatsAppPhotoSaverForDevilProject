@@ -604,33 +604,75 @@ void async function wpsBookmarklet() {
       for (const lm of liveList) liveById.set(liveId(lm), lm);
 
       const albumCaps = new Map();
+      const getCap = (lm) => {
+        if (!lm) return '';
+        const candidates = [
+          lm.caption,
+          lm.body,
+          lm.captionText,
+          lm.text,
+          lm.msg && lm.msg.caption,
+          lm.msg && lm.msg.body,
+          lm._data && lm._data.caption,
+          lm._data && lm._data.body
+        ];
+        for (const c of candidates) {
+          if (c && String(c).trim()) return String(c).trim();
+        }
+        return '';
+      };
       for (const a of albumKeys) {
+        let cap = '';
         for (const id of (albumMembers.get(a) || [])) {
           const lm = liveById.get(id);
-          const cap = lm ? String(lm.caption || '').trim() : '';
-          if (cap) { albumCaps.set(a, cap); break; }
+          cap = getCap(lm);
+          if (cap) break;
         }
-        if (albumCaps.get(a)) continue;
-        const lm = liveById.get(a);
-        let cap = lm ? String(lm.caption || lm.body || '').trim() : '';
+        if (!cap) {
+          const lm = liveById.get(a);
+          cap = getCap(lm);
+        }
+        if (!cap) {
+          try {
+            const MC2 = msgCollection();
+            if (MC2) {
+              const p = MC2.get ? MC2.get(a) : null;
+              cap = getCap(p);
+            }
+          } catch (e) {}
+        }
         if (!cap) {
           const rec = await storeGet(S.db, 'message', a);
-          cap = rec ? String(rec.caption || rec.body || '').trim() : '';
+          if (rec) {
+            cap = String(rec.caption || rec.body || rec.captionText || '').trim();
+          }
         }
         if (cap) albumCaps.set(a, cap);
+      }
+
+      // Also try to find captions for items that might have them on the media message itself
+      for (const m of picked) {
+        const a = albumKey(m);
+        const id = String(m.id || '');
+        const lm = liveById.get(id);
+        const own = getCap(lm) || String(m.caption || m.body || '').trim();
+        if (a && !albumCaps.get(a) && own) {
+          albumCaps.set(a, own);
+        }
       }
 
       const items = picked.map(m => {
         const a = albumKey(m);
         const id = String(m.id || '');
         const lm = liveById.get(id);
-        const own = String((lm && lm.caption) || m.caption || '').trim();
+        const own = getCap(lm) || String(m.caption || m.body || '').trim();
+        const albumCap = a ? (albumCaps.get(a) || own) : '';
         return {
           m,
           id,
           ts: Number(m.t) || 0,
           sender: senderFor(m, chatId, lm),
-          caption: a ? (albumCaps.get(a) || own) : own,
+          caption: a ? albumCap : own,
           album: a,
           ext: extFor(m),
         };
