@@ -822,7 +822,7 @@ void async function wpsBookmarklet() {
           addLog(`Warning: ${items.length} files may exceed available browser memory.`);
         }
         if (!liveList.length) {
-          addLog('Captions unavailable in this WhatsApp build; files go to "No caption".');
+          addLog('Captions unavailable in this WhatsApp build; files go to "No caption_HHMM".');
         }
         if (noKey) addLog(`${noKey} media record(s) had no download path (never cached by this device).`);
       }
