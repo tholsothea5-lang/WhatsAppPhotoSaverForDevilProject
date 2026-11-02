@@ -208,7 +208,7 @@
       </div>
       <div class="status" id="status" role="status" aria-live="polite">Loading the script…</div>
       <div class="hint">
-        This page is a static build on GitHub Pages. The script runs <b>inside</b> the
+        This page loads <code>docs/wps-script.js</code> directly. The script runs <b>inside</b> the
         <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer">web.whatsapp.com</a> tab you already have open,
         not here. There is no server and no password.
       </div>
@@ -234,15 +234,16 @@
 └── <span class="f">Site A</span>
     └── <span class="f">22-10-2026</span>
         ├── <span class="c">Please bring this thing too</span>
-        │   └── <span class="n">Me_22-10-2026_182335_eecdff.jpg</span>
+        │   ├── <span class="n">Please bring this thing too_001.jpg</span>
+        │   └── <span class="n">Please bring this thing too_002.jpg</span>
         ├── <span class="c">The current termination is not correct</span>
-        │   └── <span class="n">Me_22-10-2026_182811_ff11d5.jpg</span>
-        └── <span class="c">No caption</span>
-            └── <span class="n">Rabin_22-10-2026_183001_ab12cd.jpg</span></pre>
+        │   └── <span class="n">The current termination is not correct_001.jpg</span>
+        └── <span class="c">No Caption_1830</span>
+            └── <span class="n">No Caption_1830_001.jpg</span></pre>
     <p class="caption-note">
-      One folder per chat, then per day, then per caption. Album photos share the album's caption, and photos
-      without one go to <b>No caption</b>. Filenames are <code>sender_date_time_hash.ext</code> so re-downloading
-      won't overwrite.
+      ZIP structure: <b>[Chat Name]/[DD-MM-YYYY]/[AKY Folder]/...</b> Each album gets its own folder.
+      AKY rules: <b>1)</b> Album caption if present, <b>2)</b> Next text from same sender within 5 minutes, <b>3)</b> <code>No Caption_HHMM</code> using the album's upload time.
+      Photos renamed as <code>FolderName_001.jpg</code>, <code>FolderName_002.jpg</code>, etc.
     </p>
 
     <div class="grid2" style="margin-top:16px">

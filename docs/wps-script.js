@@ -97,6 +97,52 @@ void async function wpsBookmarklet() {
     return typeof id === 'string' ? id : (id._serialized || String(id));
   };
 
+  function getMsgBody(m) {
+    if (!m) return '';
+    const candidates = [m.body, m.caption, m.text, m.captionText, m.msg && m.msg.body, m.msg && m.msg.caption];
+    for (const c of candidates) {
+      if (c && String(c).trim()) return String(c).trim();
+    }
+    return '';
+  }
+
+  function getMsgSender(m, chatId) {
+    if (!m) return 'unknown';
+    if (String(liveId(m)).startsWith('true_')) return 'Me';
+    const raw = (m.author && (m.author._serialized || (m.author.user ? m.author.user + '@' + (m.author.server || 'c.us') : ''))) || '';
+    const notify = m.notifyName;
+    if (String(chatId).endsWith('@g.us')) {
+      return contactName(raw) || notify || (m.author && m.author.user) || 'unknown';
+    }
+    return contactName(chatId) || contactName(raw) || notify || (raw ? String(raw).split('@')[0] : 'unknown');
+  }
+
+  function getMsgAuthorKey(m) {
+    if (!m) return '';
+    if (String(liveId(m)).startsWith('true_')) return 'ME';
+    if (m.author) {
+      if (typeof m.author === 'string') return m.author;
+      return m.author._serialized || (m.author.user ? m.author.user + '@' + (m.author.server || 'c.us') : '');
+    }
+    if (m.from) {
+      if (typeof m.from === 'string') return m.from;
+      return m.from._serialized || '';
+    }
+    return '';
+  }
+
+  function isTextOnlyMsg(m) {
+    if (!m) return false;
+    const t = m.type;
+    if (t === 'image' || t === 'video' || t === 'sticker' || t === 'audio' || t === 'document' || t === 'ptt') return false;
+    if (m.isMediaMsg || m.directPath || m.mediaKey) return false;
+    if (m.mimetype) return false;
+    const body = getMsgBody(m);
+    if (!body) return false;
+    if (m.associationType === 'MEDIA_ALBUM' || m.album || m.parentMsgKey) return false;
+    return true;
+  }
+
   async function hydrateModels(ids) {
     const MC = msgCollection();
     if (!MC || !ids.length) return [];
@@ -250,10 +296,17 @@ void async function wpsBookmarklet() {
 
   /* ---------- data shaping ---------- */
   const albumKey = m => {
-    if (String(m.associationType || '') !== 'MEDIA_ALBUM') return '';
-    const k = m.parentMsgKey;
-    if (!k) return '';
-    return typeof k === 'string' ? k : (k.id || k._serialized || '');
+    if (m.album || m.isAlbum || m.isMultiMediaMsg || m.multiMedia) {
+      const k = m.parentMsgKey || m.albumId || m.key || m.id;
+      if (k) return typeof k === 'string' ? k : (k.id || k._serialized || String(m.id || ''));
+      return String(m.id || '');
+    }
+    if (String(m.associationType || '') === 'MEDIA_ALBUM') {
+      const k = m.parentMsgKey;
+      if (k) return typeof k === 'string' ? k : (k.id || k._serialized || String(m.id || ''));
+      return String(m.id || '');
+    }
+    return '';
   };
 
   function extFor(m) {
@@ -603,76 +656,150 @@ void async function wpsBookmarklet() {
       const liveById = new Map();
       for (const lm of liveList) liveById.set(liveId(lm), lm);
 
-      const albumCaps = new Map();
-      const getCap = (lm) => {
-        if (!lm) return '';
-        const candidates = [
-          lm.caption,
-          lm.body,
-          lm.captionText,
-          lm.text,
-          lm.msg && lm.msg.caption,
-          lm.msg && lm.msg.body,
-          lm._data && lm._data.caption,
-          lm._data && lm._data.body
-        ];
-        for (const c of candidates) {
-          if (c && String(c).trim()) return String(c).trim();
-        }
-        return '';
-      };
+      // Build timeline of all messages in chat to find next text from same sender
+      const allChatMsgs = [];
+      for (const r of rows) {
+        allChatMsgs.push(r);
+      }
+      allChatMsgs.sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
+      
+      // Get full message models for timeline
+      const allChatIds = allChatMsgs.map(m => String(m.id || '')).filter(Boolean);
+      const allHydrated = await hydrateModels([...new Set(allChatIds)]);
+      const allLiveById = new Map();
+      for (const lm of allHydrated) allLiveById.set(liveId(lm), lm);
+      
+      // For each album, find next text message from same sender within 5 minutes
+      const albumFolderMap = new Map(); // album key -> { folderName, isUnnamed, sender, ts, count }
+      const albumToSender = new Map();
+      
       for (const a of albumKeys) {
-        let cap = '';
+        // Find sender of album (look up any member or album parent)
+        let albumSender = '';
+        let albumSenderKey = '';
+        let albumTs = 0;
         for (const id of (albumMembers.get(a) || [])) {
-          const lm = liveById.get(id);
-          cap = getCap(lm);
-          if (cap) break;
-        }
-        if (!cap) {
-          const lm = liveById.get(a);
-          cap = getCap(lm);
-        }
-        if (!cap) {
-          try {
-            const MC2 = msgCollection();
-            if (MC2) {
-              const p = MC2.get ? MC2.get(a) : null;
-              cap = getCap(p);
-            }
-          } catch (e) {}
-        }
-        if (!cap) {
-          const rec = await storeGet(S.db, 'message', a);
+          const rec = allChatMsgs.find(r => String(r.id || '') === id);
           if (rec) {
-            cap = String(rec.caption || rec.body || rec.captionText || '').trim();
+            const lm = allLiveById.get(id);
+            albumSender = getMsgSender(rec, chatId, lm) || senderFor(rec, chatId, lm);
+            albumSenderKey = getMsgAuthorKey(rec) || getMsgAuthorKey(lm) || '';
+            albumTs = Number(rec.t) || albumTs;
+            break;
           }
         }
-        if (cap) albumCaps.set(a, cap);
+        if (!albumSenderKey || !albumSender) {
+          const lm = allLiveById.get(a);
+          albumSender = getMsgSender({ id: a }, chatId, lm) || 'unknown';
+          albumSenderKey = getMsgAuthorKey(lm) || '';
+          const rec = allChatMsgs.find(r => String(r.id || '') === a);
+          if (rec) albumTs = Number(rec.t) || albumTs;
+        }
+        albumToSender.set(a, { sender: albumSender, senderKey: albumSenderKey, ts: albumTs });
       }
-
-      // Also try to find captions for items that might have them on the media message itself
-      for (const m of picked) {
-        const a = albumKey(m);
-        const id = String(m.id || '');
-        const lm = liveById.get(id);
-        const own = getCap(lm) || String(m.caption || m.body || '').trim();
-        if (a && !albumCaps.get(a) && own) {
-          albumCaps.set(a, own);
+      
+      // Collect album captions
+      const albumCaps = new Map();
+      for (const a of albumKeys) {
+        const lm = liveById.get(a) || allLiveById.get(a);
+        const cap = getMsgBody(lm);
+        if (cap && cap.trim()) albumCaps.set(a, cap.trim());
+      }
+      
+      // Find folder name for each album: 1) album caption, 2) next text from same sender within 5 min, 3) No Caption_HHMM
+      for (const [a, info] of albumToSender) {
+        const albumTs = info.ts;
+        // 1) Check album caption from hydrated models first
+        let albumCaption = albumCaps.get(a) || '';
+        if (!albumCaption) {
+          const lm = allLiveById.get(a);
+          albumCaption = getMsgBody(lm) || '';
+        }
+        if (albumCaption && albumCaption.trim()) {
+          albumFolderMap.set(a, { folderName: albumCaption.trim(), isUnnamed: false, sender: info.sender });
+          continue;
+        }
+        // 2) Look for next text from same sender within 5 minutes
+        let foundFolder = '';
+        for (let i = 0; i < allChatMsgs.length; i++) {
+          const m = allChatMsgs[i];
+          const mTs = Number(m.t) || 0;
+          if (mTs <= albumTs) continue;
+          if (mTs - albumTs > 300) break;
+          const mid = String(m.id || '');
+          const lm = allLiveById.get(mid);
+          const mSenderKey = getMsgAuthorKey(m) || getMsgAuthorKey(lm) || '';
+          const mSender = getMsgSender(m, chatId, lm);
+          const sameSender = (info.senderKey && mSenderKey && info.senderKey === mSenderKey) || (info.sender && mSender && info.sender === mSender);
+          if (!sameSender) continue;
+          if (isTextOnlyMsg(lm || m)) {
+            const body = getMsgBody(lm || m);
+            if (body && body.trim()) {
+              foundFolder = body.trim();
+              break;
+            }
+          }
+        }
+        if (foundFolder) {
+          albumFolderMap.set(a, { folderName: foundFolder, isUnnamed: false, sender: info.sender });
+        } else {
+          // 3) Use No Caption_HHMM with album upload time
+          const d = new Date(albumTs * 1000);
+          const hhmm = String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0');
+          albumFolderMap.set(a, { folderName: `No Caption_${hhmm}`, isUnnamed: true, sender: info.sender });
         }
       }
-
+      
       const items = picked.map(m => {
         const a = albumKey(m);
         const id = String(m.id || '');
         const lm = liveById.get(id);
-        const own = getCap(lm) || String(m.caption || m.body || '').trim();
-        const albumCap = a ? (albumCaps.get(a) || own) : '';
+        const folderInfo = a ? albumFolderMap.get(a) : null;
+        let folderName = 'Unnamed_unknown';
+        let isUnnamed = true;
+        let sender = senderFor(m, chatId, lm);
+        if (folderInfo) {
+          folderName = folderInfo.folderName;
+          isUnnamed = folderInfo.isUnnamed;
+          sender = folderInfo.sender || sender;
+        } else {
+          // Not in album - look for next text from same sender within 5 minutes
+          const mTs = Number(m.t) || 0;
+          let foundText = '';
+          for (let i = 0; i < allChatMsgs.length; i++) {
+            const tm = allChatMsgs[i];
+            const tmTs = Number(tm.t) || 0;
+            if (tmTs <= mTs) continue;
+            if (tmTs - mTs > 300) break;
+            const tmid = String(tm.id || '');
+            const tlm = allLiveById.get(tmid);
+            const tSender = getMsgSender(tm, chatId, tlm);
+            const tSenderKey = getMsgAuthorKey(tm) || getMsgAuthorKey(tlm) || '';
+            const sKey = getMsgAuthorKey(m) || getMsgAuthorKey(lm) || '';
+            const same = (sKey && tSenderKey && sKey === tSenderKey) || (sender && tSender && sender === tSender);
+            if (!same) continue;
+            if (isTextOnlyMsg(tlm || tm)) {
+              const body = getMsgBody(tlm || tm);
+              if (body && body.trim()) { foundText = body.trim(); break; }
+            }
+          }
+          if (foundText) {
+            folderName = foundText;
+            isUnnamed = false;
+          } else {
+            const d = new Date(mTs * 1000);
+            const hhmm = String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0');
+            folderName = `No Caption_${hhmm}`;
+            isUnnamed = true;
+          }
+        }
         return {
           m,
           id,
           ts: Number(m.t) || 0,
-          sender: senderFor(m, chatId, lm),
-          caption: a ? albumCap : own,
+          sender,
+          folderName,
+          isUnnamed,
           album: a,
           ext: extFor(m),
         };
@@ -723,7 +850,23 @@ void async function wpsBookmarklet() {
     let saved = 0, failed = 0;
     const total = S.items.length;
     let firstTs = 0, lastTs = 0;
-    const captionWritten = new Map();
+    
+    // Group by folder name (album group)
+    const itemsByFolder = new Map();
+    for (const it of S.items) {
+      const key = it.folderName;
+      if (!itemsByFolder.has(key)) itemsByFolder.set(key, []);
+      itemsByFolder.get(key).push(it);
+    }
+    
+    const logInfo = [];
+    
+    // Sort items within each folder by timestamp
+    for (const [folderName, items] of itemsByFolder) {
+      items.sort((a, b) => (Number(a.ts)||0) - (Number(b.ts)||0));
+    }
+    
+    const usedNames = new Map(); // track used filenames per folder to avoid duplicates
 
     for (let i = 0; i < total; i++) {
       if (S.cancel) break;
@@ -732,27 +875,48 @@ void async function wpsBookmarklet() {
       try {
         const data = await decryptMedia(it.m);
         const when = new Date(it.ts * 1000);
-        const tail = (await sha1Hex(it.id)).slice(0, 6);
-        const hasCaption = !!(it.caption && it.caption.trim());
-        const captionKey = hasCaption ? (it.album ? `album:${it.album}` : `cap:${it.caption.trim().toLowerCase()}`) : 'none';
-        const groupKey = `${chatFolder}|${dmy(when)}|${captionKey}`;
-        const groupDir = hasCaption
-          ? safe(it.caption.trim(), 60) || 'No caption'
-          : 'No Caption';
-        const name = `${safe(it.sender, 30)}_${stamp(when)}_${tail}.${it.ext}`;
-        zipAdd(zip, `${chatFolder}/${dmy(when)}/${groupDir}/${name}`, data, when);
-        if (hasCaption && !captionWritten.has(groupKey)) {
-          const capText = it.caption.trim().replace(/\r\n/g, '\n');
-          const capBytes = new TextEncoder().encode(capText + '\n');
-          zipAdd(zip, `${chatFolder}/${dmy(when)}/${groupDir}/caption.txt`, capBytes, when);
-          captionWritten.set(groupKey, true);
+        const folderNameClean = safe(it.folderName, 80);
+        const folderKey = folderNameClean + '||' + (it.album || it.id);
+        if (!usedNames.has(folderKey)) usedNames.set(folderKey, new Set());
+        const usedSet = usedNames.get(folderKey);
+        
+        // Number files as FolderName_001.jpg, FolderName_002.jpg
+        let idx = 1;
+        // Find next available number for this folder
+        while (true) {
+          const num = String(idx).padStart(3, '0');
+          const baseName = `${folderNameClean}_${num}.${it.ext}`;
+          if (!usedSet.has(baseName)) {
+            usedSet.add(baseName);
+            // Check if we need to add _1, _2 for duplicates? The spec says "add _1, _2 and so on to duplicate file names"
+            // But we are naming sequentially as FolderName_001, 002 etc. The hash was in old naming to avoid duplicates.
+            // New spec says: "Rename photos as FolderName_001.jpg, FolderName_002.jpg, and so on" - sequential per album folder
+            zipAdd(zip, `${chatFolder}/${dmy(when)}/${folderNameClean}/${baseName}`, data, when);
+            break;
+          }
+          idx++;
         }
+        
+        if (it.isUnnamed) {
+          logInfo.push({ folder: folderNameClean, sender: it.sender, count: (itemsByFolder.get(it.folderName) || []).length });
+        }
+        
         saved++;
         if (!firstTs || it.ts < firstTs) firstTs = it.ts;
         if (it.ts > lastTs) lastTs = it.ts;
       } catch (e) {
         failed++;
         if (failed <= 25) addLog(`${new Date(it.ts * 1000).toLocaleString()}: ${e && e.message ? e.message : e}`);
+      }
+    }
+    
+    // Log unnamed folders
+    const logged = new Set();
+    for (const info of logInfo) {
+      const key = info.folder + '|' + info.sender;
+      if (!logged.has(key)) {
+        addLog(`Unnamed folder: ${info.folder} | sender: ${info.sender} | photos: ${info.count}`);
+        logged.add(key);
       }
     }
 
@@ -774,9 +938,9 @@ void async function wpsBookmarklet() {
 
       const sizeMb = (blob.size / (1024 * 1024)).toFixed(1);
       const msg = (S.cancel ? 'Stopped. ' : 'Done. ') +
-        `${saved} saved, ${failed} failed (${sizeMb} MB).\nZIP: ${zipName}`;
+        `${saved} saved, ${failed} failed (${sizeMb} MB).\nZIP: ${zipName}\n\nFolders by album (next text from same sender within 5 min): ${itemsByFolder.size}`;
       setStatus(msg, failed ? 'err' : 'ok');
-      if (failed) addLog('Failed files are usually expired on WhatsApp\u2019s servers (404/410).');
+      if (failed) addLog('Failed files are usually expired on WhatsApp\u2019s servers (HTTP 410/404). Open this chat, scroll up to load all albums/photos, wait for them to fully load, then run the script again in the same tab without reloading.');
     } catch (e) {
       setStatus('ZIP failed: ' + (e && e.message ? e.message : e), 'err');
     } finally {
